@@ -15,9 +15,19 @@ MODEL = os.environ.get("MODEL", "claude-sonnet-5")
 # short, so this is generous headroom, not a cost lever.
 MAX_TOKENS = 1024
 
-# Supported platforms for POST /repurpose. Week 1 ships "x" only -- the brief
-# calls for Week 2 to add linkedin/instagram/tiktok/newsletter.
-SUPPORTED_PLATFORMS = ["x"]
+# Supported platforms for POST /repurpose. Week 1 shipped "x" only. Week 2
+# adds "linkedin" and "instagram" -- tiktok/newsletter are still to come.
+SUPPORTED_PLATFORMS = ["x", "linkedin", "instagram"]
+
+# Platforms whose Claude response is parsed as structured JSON into a typed
+# Pydantic model, instead of returned as one plain-text blob. Instagram needs
+# this because a carousel is a list of slides, not a wall of text.
+STRUCTURED_PLATFORMS = ["instagram"]
+
+# Minimum/maximum slide count enforced in the Instagram prompt, so the
+# carousel response model always gets a sane range back from Claude.
+INSTAGRAM_MIN_SLIDES = 5
+INSTAGRAM_MAX_SLIDES = 8
 
 BRAND_VOICE_RULES = """\
 You are writing in the voice of Dara Obafemi, an AI content creator whose \
@@ -50,7 +60,39 @@ Platform: X (Twitter). Tone: hot takes, quick insights, engaged.
 Turn the source script below into an X thread (numbered tweets, each under \
 280 characters). Start with a hook tweet that earns the next click -- no \
 "here's a thread" throat-clearing. End with a short call-to-action line \
-inviting replies or pointing to Dara's Skool community. Return 5-8 tweets.
+inviting replies or pointing to Dara's Discord community. Return 5-8 tweets.
+"""
+    ),
+    "linkedin": (
+        BRAND_VOICE_RULES
+        + """
+Platform: LinkedIn. Tone: professional but still Dara's voice -- no corporate \
+jargon, no "I'm humbled to announce".
+
+Turn the source script below into a single LinkedIn post: a strong first \
+line (LinkedIn truncates long posts, so the hook has to work before the \
+"see more" click), short paragraphs or line breaks for readability, one \
+clear professional takeaway, and a closing line inviting comments. End with \
+a line pointing to Dara's Discord community. Plain text only, no markdown \
+formatting and no hashtags shoved at the bottom.
+"""
+    ),
+    "instagram": (
+        BRAND_VOICE_RULES
+        + f"""
+Platform: Instagram carousel. Tone: punchy, visual-first -- every slide is \
+read on its own as someone swipes.
+
+Turn the source script below into an Instagram carousel of \
+{INSTAGRAM_MIN_SLIDES}-{INSTAGRAM_MAX_SLIDES} slides. Slide 1 is the hook \
+(short, big-text-friendly, makes someone stop scrolling). Middle slides each \
+carry ONE idea in a few short lines -- not a paragraph, this is read as \
+large on-screen text. The last slide is a call-to-action pointing to Dara's \
+Discord community.
+
+Respond with ONLY valid JSON, no other text, in exactly this shape:
+{{"caption": "the Instagram post caption that goes under the carousel, \
+including relevant hashtags", "slides": ["slide 1 text", "slide 2 text", ...]}}
 """
     ),
 }

@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from repurposer.main import app
@@ -16,14 +18,70 @@ def test_repurpose_returns_right_shape_with_mocked_claude(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body == {"platform": "x", "content": fake_thread}
+    assert body == {"platform": "x", "content": fake_thread, "carousel": None}
 
 
 def test_repurpose_rejects_unsupported_platform():
-    response = client.post("/repurpose", json={"script": "some script", "platform": "linkedin"})
+    response = client.post("/repurpose", json={"script": "some script", "platform": "tiktok"})
 
     assert response.status_code == 400
     assert "Unsupported platform" in response.json()["detail"]
+
+
+def test_repurpose_returns_plain_text_for_linkedin(monkeypatch):
+    """LinkedIn is a plain-text platform like X -- same shape, different
+    prompt. Proves the new platform is wired through main.py correctly."""
+    fake_post = "Hook line that earns the click.\n\nThe rest of the post..."
+    monkeypatch.setattr("repurposer.main.call_claude", lambda system_prompt, user_content: fake_post)
+
+    response = client.post("/repurpose", json={"script": "A script about AI agents.", "platform": "linkedin"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {"platform": "linkedin", "content": fake_post, "carousel": None}
+
+
+def test_repurpose_parses_instagram_json_into_carousel(monkeypatch):
+    """Instagram is a structured platform: Claude's raw text must be valid
+    JSON, and the endpoint parses it into the typed InstagramCarousel shape
+    instead of returning a wall of text."""
+    fake_json = json.dumps(
+        {
+            "caption": "AI agents, explained in 6 slides. #AI #Automation",
+            "slides": [
+                "Slide 1: the hook",
+                "Slide 2: the problem",
+                "Slide 3: the idea",
+                "Slide 4: how it works",
+                "Slide 5: the takeaway",
+                "Slide 6: join the Discord",
+            ],
+        }
+    )
+    monkeypatch.setattr("repurposer.main.call_claude", lambda system_prompt, user_content: fake_json)
+
+    response = client.post("/repurpose", json={"script": "A script about AI agents.", "platform": "instagram"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["platform"] == "instagram"
+    assert body["content"] is None
+    assert body["carousel"]["caption"] == "AI agents, explained in 6 slides. #AI #Automation"
+    assert len(body["carousel"]["slides"]) == 6
+
+
+def test_repurpose_fails_loudly_on_malformed_instagram_json(monkeypatch):
+    """If Claude ignores the 'respond with only JSON' instruction, the
+    endpoint must surface a clear 502, never guess or silently drop slides."""
+    monkeypatch.setattr(
+        "repurposer.main.call_claude",
+        lambda system_prompt, user_content: "Sure! Here's your carousel: slide 1 is...",
+    )
+
+    response = client.post("/repurpose", json={"script": "A script about AI agents.", "platform": "instagram"})
+
+    assert response.status_code == 502
+    assert "instagram" in response.json()["detail"]
 
 
 def test_repurpose_fails_loudly_when_api_key_missing(monkeypatch):
