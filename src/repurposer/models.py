@@ -7,7 +7,17 @@ from pydantic import BaseModel, Field
 
 class RepurposeRequest(BaseModel):
     script: str = Field(..., min_length=1, description="The source script or long-form text to repurpose.")
-    platform: str = Field(..., description="Target platform. Supports: x, linkedin, instagram")
+    platform: str = Field(
+        ..., description="Target platform. Supports: x, linkedin, instagram, tiktok, newsletter"
+    )
+
+
+class RepurposeAllRequest(BaseModel):
+    """Request shape for /repurpose-all -- just the script. There's no
+    `platform` field here because the whole point of this endpoint is
+    'every platform', so asking the caller to name one would be misleading."""
+
+    script: str = Field(..., min_length=1, description="The source script or long-form text to repurpose.")
 
 
 class InstagramCarousel(BaseModel):

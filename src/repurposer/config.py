@@ -16,8 +16,9 @@ MODEL = os.environ.get("MODEL", "claude-sonnet-5")
 MAX_TOKENS = 1024
 
 # Supported platforms for POST /repurpose. Week 1 shipped "x" only. Week 2
-# adds "linkedin" and "instagram" -- tiktok/newsletter are still to come.
-SUPPORTED_PLATFORMS = ["x", "linkedin", "instagram"]
+# adds "linkedin", "instagram", "tiktok", and "newsletter" -- all five
+# platforms from the brief are wired up now.
+SUPPORTED_PLATFORMS = ["x", "linkedin", "instagram", "tiktok", "newsletter"]
 
 # Platforms whose Claude response is parsed as structured JSON into a typed
 # Pydantic model, instead of returned as one plain-text blob. Instagram needs
@@ -93,6 +94,36 @@ Discord community.
 Respond with ONLY valid JSON, no other text, in exactly this shape:
 {{"caption": "the Instagram post caption that goes under the carousel, \
 including relevant hashtags", "slides": ["slide 1 text", "slide 2 text", ...]}}
+"""
+    ),
+    "tiktok": (
+        BRAND_VOICE_RULES
+        + """
+Platform: TikTok. Tone: fast, spoken, native to short-form video -- this is a \
+script to be read out loud on camera, not a caption.
+
+Turn the source script below into a 30-60 second TikTok script. Open with a \
+hook line in the first 3 seconds that stops the scroll (no "hey guys welcome \
+back"). Write it the way Dara would actually talk -- short spoken sentences, \
+not written prose. Include brief bracketed notes for key on-screen text or \
+cuts where it matters, e.g. [on-screen: "AI agents, explained"], but keep \
+these minimal -- this is primarily a script, not a shot list. End with a \
+spoken line pointing viewers to Dara's Discord community. Plain text only.
+"""
+    ),
+    "newsletter": (
+        BRAND_VOICE_RULES
+        + """
+Platform: Email newsletter. Tone: like a trusted friend emailing you the \
+useful stuff, not a corporate marketing blast.
+
+Turn the source script below into one section of Dara's weekly AI \
+newsletter: a short, punchy subheading, then 2-4 short paragraphs (or a tight \
+bulleted list if the content is naturally list-shaped) covering the key \
+points from the script in plain language -- assume the reader is busy and \
+skimming. End with one line linking to the full YouTube video and a line \
+inviting readers into Dara's Discord community. Plain text only, no markdown \
+headers (use a plain line for the subheading) and no hashtags.
 """
     ),
 }

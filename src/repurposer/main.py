@@ -1,4 +1,4 @@
-"""FastAPI app. Endpoints: /health and /repurpose (x, linkedin, instagram)."""
+"""FastAPI app. Endpoints: /health, /repurpose, /repurpose-all."""
 
 import json
 
@@ -7,7 +7,14 @@ from pydantic import ValidationError
 
 from . import config
 from .claude_client import MissingApiKeyError, call_claude
-from .models import HealthResponse, InstagramCarousel, RepurposeRequest, RepurposeResponse
+from .models import (
+    HealthResponse,
+    InstagramCarousel,
+    RepurposeAllRequest,
+    RepurposeAllResponse,
+    RepurposeRequest,
+    RepurposeResponse,
+)
 
 app = FastAPI(
     title="Repurposer App",
@@ -60,3 +67,25 @@ def repurpose(req: RepurposeRequest) -> RepurposeResponse:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return _build_response(req.platform, raw_content)
+
+
+@app.post("/repurpose-all", response_model=RepurposeAllResponse)
+def repurpose_all(req: RepurposeAllRequest) -> RepurposeAllResponse:
+    """Fans out one script to every supported platform in a single call.
+
+    Same honesty rule as /repurpose: if the API key is missing, this fails
+    loudly on the very first platform instead of quietly returning a partial
+    list and hiding that four-fifths of the response never happened.
+    """
+    results = []
+    for platform in config.SUPPORTED_PLATFORMS:
+        system_prompt = config.get_system_prompt(platform)
+
+        try:
+            raw_content = call_claude(system_prompt, req.script)
+        except MissingApiKeyError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+        results.append(_build_response(platform, raw_content))
+
+    return RepurposeAllResponse(results=results)
