@@ -2,10 +2,11 @@
 
 Paste a YouTube script, get it rewritten for another platform — in Dara Obafemi's brand voice, via the Claude API. This is the backend for turning a one-person Claude Desktop workflow (`/repurpose`) into something any creator can use on the web.
 
-**Status: Week 2 of 4 — complete.** All five platforms work end-to-end: X (Twitter) threads, LinkedIn posts, Instagram carousels, TikTok scripts, and newsletter sections. A `/repurpose-all` endpoint fans out to every platform in one call. There is no UI yet (Week 3) and nothing is deployed yet (Week 4).
+**Status: Week 3 of 4 — in progress.** All five platforms work end-to-end: X (Twitter) threads, LinkedIn posts, Instagram carousels, TikTok scripts, and newsletter sections. A `/repurpose-all` endpoint fans out to every platform in one call. A minimal web UI now exists — paste a script, click Repurpose, see results. Nothing is deployed yet (Week 4).
 
 ## What it does right now
 
+- `GET /` — serves a one-page UI: paste box + "Repurpose" button that calls `/repurpose-all` and renders each platform's result as a readable card (Instagram's slides render as a numbered list, everything else as plain copyable text).
 - `GET /health` — confirms the service is up.
 - `POST /repurpose` — takes `{"script": "...", "platform": "..."}` and calls the Claude API with brand-voice rules baked into a platform-specific system prompt.
   - `platform: "x"`, `"linkedin"`, `"tiktok"`, or `"newsletter"` → returns `{"platform": "...", "content": "...", "carousel": null}` — plain text, ready to copy-paste (TikTok is a spoken script with a few bracketed on-screen-text notes; newsletter is one section of the weekly digest).
@@ -20,7 +21,7 @@ cp .env.example .env   # then paste your real ANTHROPIC_API_KEY into .env
 uvicorn repurposer.main:app --reload --app-dir src
 ```
 
-Then:
+Open `http://127.0.0.1:8000/` in a browser for the UI, or hit the API directly:
 
 ```bash
 curl http://127.0.0.1:8000/health
@@ -71,7 +72,8 @@ src/repurposer/
     config.py          # model id + brand-voice system prompts, all in one place
     claude_client.py    # thin wrapper around the Anthropic SDK (mockable)
     models.py           # Pydantic request/response shapes (incl. InstagramCarousel)
-    main.py              # FastAPI app — /health, /repurpose, /repurpose-all
+    main.py              # FastAPI app — /, /health, /repurpose, /repurpose-all
+    static/index.html    # the one-page UI (plain HTML + vanilla JS, no build step)
 tests/                  # pytest suite, all mocked
 ```
 
@@ -79,7 +81,7 @@ tests/                  # pytest suite, all mocked
 
 - **Week 1 (done):** scaffold, `/health`, `/repurpose` for X only, mocked tests.
 - **Week 2 (done):** all five platforms wired up (X, LinkedIn, Instagram carousel, TikTok, newsletter) plus `/repurpose-all` to fan out to every platform in one call.
-- **Week 3:** minimal web UI — paste box, platform toggles, copyable result cards.
+- **Week 3 (in progress):** minimal web UI. Done so far — paste box + Repurpose button wired to `/repurpose-all`, results render as cards. Still to come — platform toggles (choose a subset instead of always all five) and one-click copy buttons per card.
 - **Week 4:** deploy to a live URL, lock the API key as a host secret, basic rate limiting.
 
 Part of [Project Alpha](https://github.com/fellyroy-cmd) — Dara Obafemi's 9-month build-in-public AI career project.

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Repurposer</title>
+<style>
+    /* No framework, no build step -- just enough CSS to make this usable. */
+    body {
+        font-family: -apple-system, Segoe UI, sans-serif;
+        max-width: 760px;
+        margin: 40px auto;
+        padding: 0 20px;
+        color: #1a1a1a;
+        background: #fafafa;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    p.sub { color: #666; margin-top: 0; }
+    textarea {
+        width: 100%;
+        min-height: 220px;
+        font-size: 1rem;
+        padding: 12px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-family: inherit;
+    }
+    button {
+        margin-top: 12px;
+        padding: 10px 20px;
+        font-size: 1rem;
+        border: none;
+        border-radius: 6px;
+        background: #1a1a1a;
+        color: white;
+        cursor: pointer;
+    }
+    button:disabled { background: #999; cursor: not-allowed; }
+    .status { margin-top: 10px; color: #666; font-size: 0.9rem; }
+    .status.error { color: #b00020; }
+    .card {
+        margin-top: 20px;
+        padding: 16px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: white;
+    }
+    .card h2 {
+        margin: 0 0 10px 0;
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #444;
+    }
+    .card pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-family: inherit;
+        margin: 0;
+    }
+    .card ol { padding-left: 20px; margin: 0; }
+    .card li { margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<h1>Repurposer</h1>
+<p class="sub">Paste a script. Get it rewritten for every platform in your brand voice.</p>
+
+<textarea id="script" placeholder="Paste your YouTube script here..."></textarea>
+<br>
+<button id="go">Repurpose</button>
+<div id="status" class="status"></div>
+
+<div id="results"></div>
+
+<script>
+const PLATFORM_LABELS = {
+    x: "X (Twitter)",
+    linkedin: "LinkedIn",
+    instagram: "Instagram",
+    tiktok: "TikTok",
+    newsletter: "Newsletter",
+};
+
+const goBtn = document.getElementById("go");
+const scriptBox = document.getElementById("script");
+const statusEl = document.getElementById("status");
+const resultsEl = document.getElementById("results");
+
+function renderCard(result) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const label = PLATFORM_LABELS[result.platform] || result.platform;
+    const heading = document.createElement("h2");
+    heading.textContent = label;
+    card.appendChild(heading);
+
+    if (result.carousel) {
+        // Instagram comes back structured: a caption plus a numbered list of slides.
+        const caption = document.createElement("p");
+        caption.textContent = "Caption: " + result.carousel.caption;
+        card.appendChild(caption);
+
+        const list = document.createElement("ol");
+        for (const slide of result.carousel.slides) {
+            const item = document.createElement("li");
+            item.textContent = slide;
+            list.appendChild(item);
+        }
+        card.appendChild(list);
+    } else {
+        // Every other platform is plain text -- just show it as-is, copyable.
+        const pre = document.createElement("pre");
+        pre.textContent = result.content;
+        card.appendChild(pre);
+    }
+
+    return card;
+}
+
+async function repurposeAll() {
+    const script = scriptBox.value.trim();
+    if (!script) {
+        statusEl.textContent = "Paste a script first.";
+        statusEl.className = "status error";
+        return;
+    }
+
+    goBtn.disabled = true;
+    statusEl.className = "status";
+    statusEl.textContent = "Calling Claude for all five platforms... this can take a few seconds.";
+    resultsEl.innerHTML = "";
+
+    try {
+        const response = await fetch("/repurpose-all", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ script }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            // FastAPI error responses put the message in `detail`.
+            throw new Error(data.detail || "Something went wrong.");
+        }
+
+        statusEl.textContent = "Done -- " + data.results.length + " platforms ready to copy.";
+        for (const result of data.results) {
+            resultsEl.appendChild(renderCard(result));
+        }
+    } catch (err) {
+        statusEl.className = "status error";
+        statusEl.textContent = err.message;
+    } finally {
+        goBtn.disabled = false;
+    }
+}
+
+goBtn.addEventListener("click", repurposeAll);
+</script>
+
+</body>
+</html>

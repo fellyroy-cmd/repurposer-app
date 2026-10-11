@@ -1,8 +1,10 @@
-"""FastAPI app. Endpoints: /health, /repurpose, /repurpose-all."""
+"""FastAPI app. Endpoints: /, /health, /repurpose, /repurpose-all."""
 
 import json
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import ValidationError
 
 from . import config
@@ -20,6 +22,16 @@ app = FastAPI(
     title="Repurposer App",
     description="Paste a script, get it rewritten for another platform in Dara's brand voice.",
 )
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+@app.get("/", response_class=HTMLResponse)
+def index() -> str:
+    """Serves the single-page UI. Read fresh from disk on every request
+    (not cached in memory) so editing index.html doesn't need a server
+    restart -- handy while the frontend is still being built out."""
+    return (STATIC_DIR / "index.html").read_text(encoding="utf-8")
 
 
 @app.get("/health", response_model=HealthResponse)
