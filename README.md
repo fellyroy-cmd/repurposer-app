@@ -2,11 +2,11 @@
 
 Paste a YouTube script, get it rewritten for another platform — in Dara Obafemi's brand voice, via the Claude API. This is the backend for turning a one-person Claude Desktop workflow (`/repurpose`) into something any creator can use on the web.
 
-**Status: Week 3 of 4 — in progress.** All five platforms work end-to-end: X (Twitter) threads, LinkedIn posts, Instagram carousels, TikTok scripts, and newsletter sections. A `/repurpose-all` endpoint fans out to every platform in one call. A minimal web UI now exists — paste a script, click Repurpose, see results. Nothing is deployed yet (Week 4).
+**Status: Week 3 of 4 — in progress.** All five platforms work end-to-end: X (Twitter) threads, LinkedIn posts, Instagram carousels, TikTok scripts, and newsletter sections. A `/repurpose-all` endpoint fans out to every platform in one call. A minimal web UI now exists — paste a script, click Repurpose, see results, and copy any card's content to the clipboard in one click. Nothing is deployed yet (Week 4).
 
 ## What it does right now
 
-- `GET /` — serves a one-page UI: paste box + "Repurpose" button that calls `/repurpose-all` and renders each platform's result as a readable card (Instagram's slides render as a numbered list, everything else as plain copyable text).
+- `GET /` — serves a one-page UI: paste box + "Repurpose" button that calls `/repurpose-all` and renders each platform's result as a readable card (Instagram's slides render as a numbered list, everything else as plain copyable text). Each card has a "Copy" button that puts that platform's content straight on the clipboard — for Instagram, it flattens the caption + numbered slides into one block of text so there's something sensible to paste.
 - `GET /health` — confirms the service is up.
 - `POST /repurpose` — takes `{"script": "...", "platform": "..."}` and calls the Claude API with brand-voice rules baked into a platform-specific system prompt.
   - `platform: "x"`, `"linkedin"`, `"tiktok"`, or `"newsletter"` → returns `{"platform": "...", "content": "...", "carousel": null}` — plain text, ready to copy-paste (TikTok is a spoken script with a few bracketed on-screen-text notes; newsletter is one section of the weekly digest).
@@ -81,7 +81,7 @@ tests/                  # pytest suite, all mocked
 
 - **Week 1 (done):** scaffold, `/health`, `/repurpose` for X only, mocked tests.
 - **Week 2 (done):** all five platforms wired up (X, LinkedIn, Instagram carousel, TikTok, newsletter) plus `/repurpose-all` to fan out to every platform in one call.
-- **Week 3 (in progress):** minimal web UI. Done so far — paste box + Repurpose button wired to `/repurpose-all`, results render as cards. Still to come — platform toggles (choose a subset instead of always all five) and one-click copy buttons per card.
+- **Week 3 (in progress):** minimal web UI. Done so far — paste box + Repurpose button wired to `/repurpose-all`, results render as cards, each card has a one-click Copy button. Still to come — platform toggles (choose a subset instead of always all five).
 - **Week 4:** deploy to a live URL, lock the API key as a host secret, basic rate limiting.
 
 Part of [Project Alpha](https://github.com/fellyroy-cmd) — Dara Obafemi's 9-month build-in-public AI career project.

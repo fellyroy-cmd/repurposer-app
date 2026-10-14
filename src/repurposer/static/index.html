@@ -45,12 +45,30 @@
         border-radius: 8px;
         background: white;
     }
+    .card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
     .card h2 {
         margin: 0 0 10px 0;
         font-size: 1rem;
         text-transform: uppercase;
         letter-spacing: 0.04em;
         color: #444;
+    }
+    .copy-btn {
+        margin: 0;
+        padding: 4px 12px;
+        font-size: 0.8rem;
+        background: white;
+        color: #1a1a1a;
+        border: 1px solid #ccc;
+    }
+    .copy-btn.copied {
+        background: #1a7a3a;
+        color: white;
+        border-color: #1a7a3a;
     }
     .card pre {
         white-space: pre-wrap;
@@ -88,14 +106,53 @@ const scriptBox = document.getElementById("script");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
 
+function plainTextFor(result) {
+    // What actually lands on the clipboard. Plain-text platforms are
+    // already copyable as-is; the IG carousel is structured data, so it
+    // gets flattened into something a human would paste into a real post:
+    // caption first, then each slide numbered underneath.
+    if (result.carousel) {
+        const slides = result.carousel.slides
+            .map((slide, i) => (i + 1) + ". " + slide)
+            .join("\n");
+        return result.carousel.caption + "\n\n" + slides;
+    }
+    return result.content;
+}
+
 function renderCard(result) {
     const card = document.createElement("div");
     card.className = "card";
 
+    const header = document.createElement("div");
+    header.className = "card-header";
+
     const label = PLATFORM_LABELS[result.platform] || result.platform;
     const heading = document.createElement("h2");
     heading.textContent = label;
-    card.appendChild(heading);
+    header.appendChild(heading);
+
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "copy-btn";
+    copyBtn.textContent = "Copy";
+    copyBtn.addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(plainTextFor(result));
+            copyBtn.textContent = "Copied!";
+            copyBtn.classList.add("copied");
+        } catch (err) {
+            copyBtn.textContent = "Copy failed";
+        } finally {
+            setTimeout(() => {
+                copyBtn.textContent = "Copy";
+                copyBtn.classList.remove("copied");
+            }, 1500);
+        }
+    });
+    header.appendChild(copyBtn);
+
+    card.appendChild(header);
 
     if (result.carousel) {
         // Instagram comes back structured: a caption plus a numbered list of slides.
