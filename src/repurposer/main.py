@@ -83,14 +83,29 @@ def repurpose(req: RepurposeRequest) -> RepurposeResponse:
 
 @app.post("/repurpose-all", response_model=RepurposeAllResponse)
 def repurpose_all(req: RepurposeAllRequest) -> RepurposeAllResponse:
-    """Fans out one script to every supported platform in a single call.
+    """Fans out one script to a chosen set of platforms in a single call.
+
+    `platforms` defaults to every supported platform when omitted or empty --
+    that keeps the "always all five" behavior from Week 2 working for anyone
+    who doesn't pass the new field. When a subset is given, every entry must
+    be a real platform (same 400 rule as /repurpose) so a typo doesn't just
+    get silently skipped.
 
     Same honesty rule as /repurpose: if the API key is missing, this fails
     loudly on the very first platform instead of quietly returning a partial
-    list and hiding that four-fifths of the response never happened.
+    list and hiding that the rest never happened.
     """
+    platforms = req.platforms or config.SUPPORTED_PLATFORMS
+
+    unsupported = [p for p in platforms if p not in config.SUPPORTED_PLATFORMS]
+    if unsupported:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported platform(s) {unsupported}. Supported so far: {config.SUPPORTED_PLATFORMS}",
+        )
+
     results = []
-    for platform in config.SUPPORTED_PLATFORMS:
+    for platform in platforms:
         system_prompt = config.get_system_prompt(platform)
 
         try:

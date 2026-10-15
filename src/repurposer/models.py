@@ -13,11 +13,16 @@ class RepurposeRequest(BaseModel):
 
 
 class RepurposeAllRequest(BaseModel):
-    """Request shape for /repurpose-all -- just the script. There's no
-    `platform` field here because the whole point of this endpoint is
-    'every platform', so asking the caller to name one would be misleading."""
+    """Request shape for /repurpose-all. `platforms` is optional and defaults
+    to every supported platform when omitted or empty -- so existing callers
+    (and the original "always all five" behavior) keep working unchanged.
+    Pass a subset to only fan out to the platforms the caller actually wants."""
 
     script: str = Field(..., min_length=1, description="The source script or long-form text to repurpose.")
+    platforms: Optional[List[str]] = Field(
+        default=None,
+        description="Subset of platforms to generate. Omit or leave empty for all supported platforms.",
+    )
 
 
 class InstagramCarousel(BaseModel):

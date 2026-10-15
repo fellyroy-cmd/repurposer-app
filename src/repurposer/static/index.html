@@ -78,6 +78,24 @@
     }
     .card ol { padding-left: 20px; margin: 0; }
     .card li { margin-bottom: 8px; }
+    .toggles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+    }
+    .toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border: 1px solid #ccc;
+        border-radius: 999px;
+        background: white;
+        font-size: 0.9rem;
+        cursor: pointer;
+    }
+    .toggle input { cursor: pointer; }
 </style>
 </head>
 <body>
@@ -86,7 +104,9 @@
 <p class="sub">Paste a script. Get it rewritten for every platform in your brand voice.</p>
 
 <textarea id="script" placeholder="Paste your YouTube script here..."></textarea>
-<br>
+
+<div id="toggles" class="toggles"></div>
+
 <button id="go">Repurpose</button>
 <div id="status" class="status"></div>
 
@@ -105,6 +125,36 @@ const goBtn = document.getElementById("go");
 const scriptBox = document.getElementById("script");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
+const togglesEl = document.getElementById("toggles");
+
+// One checkbox per platform, all checked by default -- "generate everything"
+// is still the default experience, toggles just let you narrow it down.
+function buildToggles() {
+    for (const platform of Object.keys(PLATFORM_LABELS)) {
+        const label = document.createElement("label");
+        label.className = "toggle";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = platform;
+        checkbox.checked = true;
+        checkbox.className = "platform-toggle";
+
+        const text = document.createElement("span");
+        text.textContent = PLATFORM_LABELS[platform];
+
+        label.appendChild(checkbox);
+        label.appendChild(text);
+        togglesEl.appendChild(label);
+    }
+}
+
+function selectedPlatforms() {
+    const checked = togglesEl.querySelectorAll(".platform-toggle:checked");
+    return Array.from(checked).map((box) => box.value);
+}
+
+buildToggles();
 
 function plainTextFor(result) {
     // What actually lands on the clipboard. Plain-text platforms are
@@ -185,16 +235,23 @@ async function repurposeAll() {
         return;
     }
 
+    const platforms = selectedPlatforms();
+    if (platforms.length === 0) {
+        statusEl.textContent = "Pick at least one platform.";
+        statusEl.className = "status error";
+        return;
+    }
+
     goBtn.disabled = true;
     statusEl.className = "status";
-    statusEl.textContent = "Calling Claude for all five platforms... this can take a few seconds.";
+    statusEl.textContent = "Calling Claude for " + platforms.length + " platform" + (platforms.length === 1 ? "" : "s") + "... this can take a few seconds.";
     resultsEl.innerHTML = "";
 
     try {
         const response = await fetch("/repurpose-all", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ script }),
+            body: JSON.stringify({ script, platforms }),
         });
 
         const data = await response.json();

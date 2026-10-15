@@ -154,6 +154,61 @@ def test_repurpose_all_returns_every_platform(monkeypatch):
     assert len(by_platform["instagram"]["carousel"]["slides"]) == 5
 
 
+def test_repurpose_all_respects_platform_subset(monkeypatch):
+    """Passing `platforms` narrows the fan-out to just those platforms --
+    the toggle UI's whole point is letting someone skip platforms they don't
+    want, so the backend must only call Claude for the ones asked for."""
+    calls = []
+
+    def fake_call_claude(system_prompt, user_content):
+        calls.append(system_prompt)
+        return "some text"
+
+    monkeypatch.setattr("repurposer.main.call_claude", fake_call_claude)
+
+    response = client.post(
+        "/repurpose-all",
+        json={"script": "A script about AI agents.", "platforms": ["x", "linkedin"]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    results = body["results"]
+    assert len(results) == 2
+    assert {r["platform"] for r in results} == {"x", "linkedin"}
+    # Proves only 2 Claude calls happened, not all 5.
+    assert len(calls) == 2
+
+
+def test_repurpose_all_defaults_to_every_platform_when_platforms_omitted(monkeypatch):
+    """Existing callers that never send `platforms` must keep getting the
+    original "all five" behavior -- this field is additive, not breaking."""
+    instagram_json = json.dumps({"caption": "caption text", "slides": ["s1", "s2", "s3", "s4", "s5"]})
+
+    def fake_call_claude(system_prompt, user_content):
+        if "Instagram carousel" in system_prompt:
+            return instagram_json
+        return "some platform text"
+
+    monkeypatch.setattr("repurposer.main.call_claude", fake_call_claude)
+
+    response = client.post("/repurpose-all", json={"script": "A script about AI agents."})
+
+    assert response.status_code == 200
+    assert len(response.json()["results"]) == 5
+
+
+def test_repurpose_all_rejects_unsupported_platform_in_subset():
+    response = client.post(
+        "/repurpose-all",
+        json={"script": "some script", "platforms": ["x", "facebook"]},
+    )
+
+    assert response.status_code == 400
+    assert "Unsupported platform" in response.json()["detail"]
+    assert "facebook" in response.json()["detail"]
+
+
 def test_repurpose_all_fails_loudly_when_api_key_missing(monkeypatch):
     """Same honesty rule applies to the fan-out: if the key is missing, this
     must not quietly return a partial list of whichever platforms happened
