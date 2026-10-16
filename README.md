@@ -2,7 +2,7 @@
 
 Paste a YouTube script, get it rewritten for another platform — in Dara Obafemi's brand voice, via the Claude API. This is the backend for turning a one-person Claude Desktop workflow (`/repurpose`) into something any creator can use on the web.
 
-**Status: Week 3 of 4 — done.** All five platforms work end-to-end: X (Twitter) threads, LinkedIn posts, Instagram carousels, TikTok scripts, and newsletter sections. A `/repurpose-all` endpoint fans out to every platform (or just the ones you pick) in one call. The web UI has a paste box, a checkbox toggle per platform, a Repurpose button, results as readable cards, and a one-click Copy button per card. Nothing is deployed yet (Week 4, starting now).
+**Status: Week 4 of 4 — in progress.** All five platforms work end-to-end: X (Twitter) threads, LinkedIn posts, Instagram carousels, TikTok scripts, and newsletter sections. A `/repurpose-all` endpoint fans out to every platform (or just the ones you pick) in one call. The web UI has a paste box, a checkbox toggle per platform, a Repurpose button, results as readable cards, and a one-click Copy button per card. The token-spending endpoints are now rate-limited (default: 10 requests per 60 seconds per client). Not deployed to a live URL yet — that's the next increment.
 
 ## What it does right now
 
@@ -12,6 +12,8 @@ Paste a YouTube script, get it rewritten for another platform — in Dara Obafem
   - `platform: "x"`, `"linkedin"`, `"tiktok"`, or `"newsletter"` → returns `{"platform": "...", "content": "...", "carousel": null}` — plain text, ready to copy-paste (TikTok is a spoken script with a few bracketed on-screen-text notes; newsletter is one section of the weekly digest).
   - `platform: "instagram"` → returns `{"platform": "instagram", "content": null, "carousel": {"caption": "...", "slides": ["...", "..."]}}` — a **typed object**, not a wall of text. Claude is instructed to respond with only JSON; the app parses and validates that JSON into a fixed shape (`caption` + a list of `slides`) before it ever reaches the response. If Claude's output doesn't match that shape, the endpoint returns a clear `502` instead of guessing or dropping slides silently.
 - `POST /repurpose-all` — takes `{"script": "...", "platforms": [...]}` and returns `{"results": [...]}`, one entry per requested platform, each entry shaped exactly like a single `/repurpose` response. `platforms` is optional — omit it (or send an empty list) and it runs all five, same as before. Pass a subset (e.g. `["x", "linkedin"]`) to only spend tokens on the platforms you actually want; an unknown platform name in the list returns a `400`, same rule as `/repurpose`. Reuses the same parse-and-validate path, so Instagram still comes back as a typed carousel inside the fan-out, not a wall of text. Same fail-loud rule applies: if the API key is missing, this returns a `503` immediately instead of quietly returning a partial list.
+
+**Rate limiting:** `/repurpose` and `/repurpose-all` share one request budget per client IP — **10 requests per 60-second window by default** (both configurable via `RATE_LIMIT_MAX_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` in `.env`). Go over the limit and you get a clear `429` explaining exactly what happened, not a silent drop or a queued request. `GET /health` is never rate-limited — a monitoring check should always get through. This is a simple in-memory counter (no new dependency), which is fine for this project's single-process deploy target but means the budget resets if the process restarts and isn't shared across multiple server instances.
 
 ## Running it
 
@@ -75,6 +77,7 @@ Tests mock the Claude API client entirely — no API key or network call needed 
 src/repurposer/
     config.py          # model id + brand-voice system prompts, all in one place
     claude_client.py    # thin wrapper around the Anthropic SDK (mockable)
+    rate_limit.py        # in-memory per-client rate limiter for the token-spending endpoints
     models.py           # Pydantic request/response shapes (incl. InstagramCarousel)
     main.py              # FastAPI app — /, /health, /repurpose, /repurpose-all
     static/index.html    # the one-page UI (plain HTML + vanilla JS, no build step)
@@ -86,6 +89,6 @@ tests/                  # pytest suite, all mocked
 - **Week 1 (done):** scaffold, `/health`, `/repurpose` for X only, mocked tests.
 - **Week 2 (done):** all five platforms wired up (X, LinkedIn, Instagram carousel, TikTok, newsletter) plus `/repurpose-all` to fan out to every platform in one call.
 - **Week 3 (done):** minimal web UI — paste box + a checkbox toggle per platform (pick a subset instead of always all five) + Repurpose button wired to `/repurpose-all`, results render as cards, each card has a one-click Copy button.
-- **Week 4 (in progress):** deploy to a live URL, lock the API key as a host secret, basic rate limiting.
+- **Week 4 (in progress):** basic rate limiting on the token-spending endpoints (done — 10 req/60s per client by default) · deploy to a live URL · lock the API key as a host secret, both still to come.
 
 Part of [Project Alpha](https://github.com/fellyroy-cmd) — Dara Obafemi's 9-month build-in-public AI career project.

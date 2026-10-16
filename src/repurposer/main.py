@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import ValidationError
 
@@ -17,6 +17,7 @@ from .models import (
     RepurposeRequest,
     RepurposeResponse,
 )
+from .rate_limit import RateLimitExceeded, check_rate_limit
 
 app = FastAPI(
     title="Repurposer App",
@@ -37,6 +38,17 @@ def index() -> str:
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+def _enforce_rate_limit(request: Request) -> None:
+    """Shared guard for the token-spending endpoints. Keys the limit on the
+    caller's IP -- fails loudly with a 429 naming the limit, never a silent
+    drop, matching this project's honesty rule. /health never calls this."""
+    client_id = request.client.host if request.client else "unknown"
+    try:
+        check_rate_limit(client_id)
+    except RateLimitExceeded as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
 
 
 def _build_response(platform: str, raw_content: str) -> RepurposeResponse:
@@ -63,7 +75,9 @@ def _build_response(platform: str, raw_content: str) -> RepurposeResponse:
 
 
 @app.post("/repurpose", response_model=RepurposeResponse)
-def repurpose(req: RepurposeRequest) -> RepurposeResponse:
+def repurpose(req: RepurposeRequest, request: Request) -> RepurposeResponse:
+    _enforce_rate_limit(request)
+
     if req.platform not in config.SUPPORTED_PLATFORMS:
         raise HTTPException(
             status_code=400,
@@ -82,7 +96,7 @@ def repurpose(req: RepurposeRequest) -> RepurposeResponse:
 
 
 @app.post("/repurpose-all", response_model=RepurposeAllResponse)
-def repurpose_all(req: RepurposeAllRequest) -> RepurposeAllResponse:
+def repurpose_all(req: RepurposeAllRequest, request: Request) -> RepurposeAllResponse:
     """Fans out one script to a chosen set of platforms in a single call.
 
     `platforms` defaults to every supported platform when omitted or empty --
@@ -95,6 +109,8 @@ def repurpose_all(req: RepurposeAllRequest) -> RepurposeAllResponse:
     loudly on the very first platform instead of quietly returning a partial
     list and hiding that the rest never happened.
     """
+    _enforce_rate_limit(request)
+
     platforms = req.platforms or config.SUPPORTED_PLATFORMS
 
     unsupported = [p for p in platforms if p not in config.SUPPORTED_PLATFORMS]
