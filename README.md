@@ -2,7 +2,7 @@
 
 Paste a YouTube script, get it rewritten for another platform — in Dara Obafemi's brand voice, via the Claude API. This is the backend for turning a one-person Claude Desktop workflow (`/repurpose`) into something any creator can use on the web.
 
-**Status: Week 4 of 4 — in progress.** All five platforms work end-to-end: X (Twitter) threads, LinkedIn posts, Instagram carousels, TikTok scripts, and newsletter sections. A `/repurpose-all` endpoint fans out to every platform (or just the ones you pick) in one call. The web UI has a paste box, a checkbox toggle per platform, a Repurpose button, results as readable cards, and a one-click Copy button per card. The token-spending endpoints are now rate-limited (default: 10 requests per 60 seconds per client). Not deployed to a live URL yet — that's the next increment.
+**Status: Week 4 of 4 — in progress.** All five platforms work end-to-end: X (Twitter) threads, LinkedIn posts, Instagram carousels, TikTok scripts, and newsletter sections. A `/repurpose-all` endpoint fans out to every platform (or just the ones you pick) in one call. The web UI has a paste box, a checkbox toggle per platform, a Repurpose button, results as readable cards, and a one-click Copy button per card. The token-spending endpoints are rate-limited (default: 10 requests per 60 seconds per client). A `Dockerfile` is now in the repo so it's deploy-ready — **but there is still no live URL.** That needs a real Render/Railway/Fly account and host secrets that only Dara can create.
 
 ## What it does right now
 
@@ -18,10 +18,12 @@ Paste a YouTube script, get it rewritten for another platform — in Dara Obafem
 ## Running it
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # prod deps + pytest/httpx for testing
 cp .env.example .env   # then paste your real ANTHROPIC_API_KEY into .env
 uvicorn repurposer.main:app --reload --app-dir src
 ```
+
+(Just running the app with no plan to test it? `pip install -r requirements.txt` alone is enough — it skips pytest/httpx, which are dev-only.)
 
 Open `http://127.0.0.1:8000/` in a browser for the UI, or hit the API directly:
 
@@ -71,6 +73,25 @@ pytest
 
 Tests mock the Claude API client entirely — no API key or network call needed to run the suite. That's intentional: CI (and anyone cloning this repo) can verify the wiring is correct without spending a cent.
 
+## Deploying (prep done, not live yet)
+
+A `Dockerfile` + `.dockerignore` are in the repo so the app is ready to deploy the moment there's a Render/Railway/Fly account to deploy it to — this is **prep, not a live deploy**. There is no public URL yet.
+
+What's already handled in the image:
+- Only `requirements.txt` (prod deps) gets installed — pytest and httpx stay out of the deployed image, they're dev-only (`requirements-dev.txt`).
+- The app binds to whatever `$PORT` the host injects at runtime, not a hardcoded port — Render, Railway, and Fly all route traffic this way, and a hardcoded port would silently break on all three.
+- A `HEALTHCHECK` hits `/health` every 30s so the host knows if the container is actually alive.
+- `ANTHROPIC_API_KEY` is never baked into the image or copied in from `.env` (`.dockerignore` excludes it) — it has to be set as a host secret on whichever platform this lands on, read fresh from the environment the same way it already is locally.
+
+To try it locally once Docker Desktop is installed:
+
+```bash
+docker build -t repurposer-app .
+docker run -p 8000:8000 -e ANTHROPIC_API_KEY=your-real-key repurposer-app
+```
+
+Still to come before this is actually "shipped": pick a host, create the account, set `ANTHROPIC_API_KEY` (and the rate-limit vars, if overriding the defaults) as that host's secrets, and push.
+
 ## Project layout
 
 ```
@@ -82,6 +103,10 @@ src/repurposer/
     main.py              # FastAPI app — /, /health, /repurpose, /repurpose-all
     static/index.html    # the one-page UI (plain HTML + vanilla JS, no build step)
 tests/                  # pytest suite, all mocked
+Dockerfile              # deploy prep — builds a container, not yet pushed anywhere live
+.dockerignore           # keeps .env, tests/, and dev-only files out of the image
+requirements.txt        # prod deps only (what the Docker image installs)
+requirements-dev.txt     # prod deps + pytest/httpx (what you need to run the test suite)
 ```
 
 ## Roadmap
@@ -89,6 +114,6 @@ tests/                  # pytest suite, all mocked
 - **Week 1 (done):** scaffold, `/health`, `/repurpose` for X only, mocked tests.
 - **Week 2 (done):** all five platforms wired up (X, LinkedIn, Instagram carousel, TikTok, newsletter) plus `/repurpose-all` to fan out to every platform in one call.
 - **Week 3 (done):** minimal web UI — paste box + a checkbox toggle per platform (pick a subset instead of always all five) + Repurpose button wired to `/repurpose-all`, results render as cards, each card has a one-click Copy button.
-- **Week 4 (in progress):** basic rate limiting on the token-spending endpoints (done — 10 req/60s per client by default) · deploy to a live URL · lock the API key as a host secret, both still to come.
+- **Week 4 (in progress):** basic rate limiting on the token-spending endpoints (done — 10 req/60s per client by default) · `Dockerfile` deploy prep (done — see "Deploying" above) · actually deploying to a live URL + locking the API key as a host secret, still to come.
 
 Part of [Project Alpha](https://github.com/fellyroy-cmd) — Dara Obafemi's 9-month build-in-public AI career project.
