@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import ValidationError
 
 from . import config
-from .claude_client import MissingApiKeyError, call_claude
+from .claude_client import ClaudeApiError, MissingApiKeyError, call_claude
 from .models import (
     HealthResponse,
     InstagramCarousel,
@@ -91,6 +91,11 @@ def repurpose(req: RepurposeRequest, request: Request) -> RepurposeResponse:
     except MissingApiKeyError as exc:
         # Fail loudly -- no fake demo mode, per the project's honesty rule.
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ClaudeApiError as exc:
+        # The key exists but Anthropic's API itself rejected or failed the
+        # call (bad key, their rate limit, network/server error). Still
+        # fails loudly with a clear message -- never a fake response.
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
     return _build_response(req.platform, raw_content)
 
@@ -128,6 +133,8 @@ def repurpose_all(req: RepurposeAllRequest, request: Request) -> RepurposeAllRes
             raw_content = call_claude(system_prompt, req.script)
         except MissingApiKeyError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except ClaudeApiError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
         results.append(_build_response(platform, raw_content))
 

@@ -226,6 +226,41 @@ def test_repurpose_all_fails_loudly_when_api_key_missing(monkeypatch):
     assert "ANTHROPIC_API_KEY is not set" in response.json()["detail"]
 
 
+def test_repurpose_surfaces_claude_api_error_with_its_own_status_code(monkeypatch):
+    """When the key is set but Claude's API itself rejects/fails the call
+    (bad key, Anthropic's rate limit, their outage), the endpoint must map
+    it to a clear HTTP error using the status code the error carries --
+    never an unhandled 500 with a raw stack trace."""
+    from repurposer.claude_client import ClaudeApiError
+
+    def raise_claude_api_error(system_prompt, user_content):
+        raise ClaudeApiError("Claude rejected the API key as invalid.", status_code=502)
+
+    monkeypatch.setattr("repurposer.main.call_claude", raise_claude_api_error)
+
+    response = client.post("/repurpose", json={"script": "some script", "platform": "x"})
+
+    assert response.status_code == 502
+    assert "Claude rejected the API key as invalid" in response.json()["detail"]
+
+
+def test_repurpose_all_surfaces_claude_api_error_with_its_own_status_code(monkeypatch):
+    """Same mapping applies to the fan-out endpoint -- a Claude-side failure
+    on any platform in the loop must fail loudly with the right status code,
+    not a generic 500."""
+    from repurposer.claude_client import ClaudeApiError
+
+    def raise_claude_api_error(system_prompt, user_content):
+        raise ClaudeApiError("Couldn't reach the Claude API -- a network problem.", status_code=503)
+
+    monkeypatch.setattr("repurposer.main.call_claude", raise_claude_api_error)
+
+    response = client.post("/repurpose-all", json={"script": "some script", "platforms": ["x"]})
+
+    assert response.status_code == 503
+    assert "Couldn't reach the Claude API" in response.json()["detail"]
+
+
 def test_repurpose_fails_loudly_when_api_key_missing(monkeypatch):
     """Simulates the real no-key situation: call_claude raises
     MissingApiKeyError exactly like it would with no ANTHROPIC_API_KEY set.

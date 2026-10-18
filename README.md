@@ -2,7 +2,7 @@
 
 Paste a YouTube script, get it rewritten for another platform — in Dara Obafemi's brand voice, via the Claude API. This is the backend for turning a one-person Claude Desktop workflow (`/repurpose`) into something any creator can use on the web.
 
-**Status: Week 4 of 4 — in progress.** All five platforms work end-to-end: X (Twitter) threads, LinkedIn posts, Instagram carousels, TikTok scripts, and newsletter sections. A `/repurpose-all` endpoint fans out to every platform (or just the ones you pick) in one call. The web UI has a paste box, a checkbox toggle per platform, a Repurpose button, results as readable cards, and a one-click Copy button per card. The token-spending endpoints are rate-limited (default: 10 requests per 60 seconds per client). A `Dockerfile` is now in the repo so it's deploy-ready — **but there is still no live URL.** That needs a real Render/Railway/Fly account and host secrets that only Dara can create.
+**Status: Week 4 of 4 — in progress.** All five platforms work end-to-end: X (Twitter) threads, LinkedIn posts, Instagram carousels, TikTok scripts, and newsletter sections. A `/repurpose-all` endpoint fans out to every platform (or just the ones you pick) in one call. The web UI has a paste box, a checkbox toggle per platform, a Repurpose button, results as readable cards, and a one-click Copy button per card. The token-spending endpoints are rate-limited (default: 10 requests per 60 seconds per client). Errors from Claude's API itself (bad key, Anthropic-side rate limit, network failure, their outage) are caught and turned into clear messages, never a raw crash. A `Dockerfile` is now in the repo so it's deploy-ready — **but there is still no live URL.** That needs a real Render/Railway/Fly account and host secrets that only Dara can create.
 
 ## What it does right now
 
@@ -61,6 +61,18 @@ curl -X POST http://127.0.0.1:8000/repurpose-all \
 
 If `ANTHROPIC_API_KEY` is missing, `/repurpose` and `/repurpose-all` both return a clear `503` error explaining exactly what's wrong — neither fakes a response or runs a silent "demo mode".
 
+**Beyond a missing key:** if the key is set but wrong, if Anthropic's own API is rate-limiting your account, or if their API is down/unreachable, both endpoints still fail loudly with a specific, readable error instead of an unhandled `500` and a raw stack trace:
+
+| What happened | Status | Example message |
+|---|---|---|
+| `ANTHROPIC_API_KEY` not set at all | `503` | "ANTHROPIC_API_KEY is not set..." |
+| Key is set but Claude rejects it as invalid | `502` | "Claude rejected the API key as invalid..." |
+| Anthropic's own rate limit on your account | `502` | "Claude's API rate limit was hit..." |
+| Network/timeout reaching Anthropic | `503` | "Couldn't reach the Claude API..." |
+| Anthropic-side server error (their outage) | `502` | "Claude's API returned an error (status 500)..." |
+
+None of these messages ever include the API key itself — only Anthropic's own (key-free) error text, re-wrapped into a clearer sentence.
+
 ## Cost, honestly
 
 Every `/repurpose` call makes one real request to the Claude API (model set via `MODEL` in `.env`, default `claude-sonnet-5`). You're billed per token by Anthropic for both the system prompt + your script (input) and the generated post (output). A typical YouTube script (a few hundred words) plus a short response costs a small fraction of a cent to a few cents per call, depending on script length and platform — the Instagram prompt asks for 5-8 slides plus a caption, so it runs a bit more output tokens than X or LinkedIn. **`/repurpose-all` makes one Claude request per platform you select** — all five by default, or fewer if you uncheck some in the UI (or pass a shorter `platforms` list directly) — so unchecking three platforms cuts the cost of that call roughly in half, not just the response size. Check Anthropic's current per-model pricing before running this against a lot of scripts. There is no caching or batching yet, so every call is a fresh charge.
@@ -97,7 +109,7 @@ Still to come before this is actually "shipped": pick a host, create the account
 ```
 src/repurposer/
     config.py          # model id + brand-voice system prompts, all in one place
-    claude_client.py    # thin wrapper around the Anthropic SDK (mockable)
+    claude_client.py    # thin wrapper around the Anthropic SDK (mockable), wraps SDK errors into clear, safe messages
     rate_limit.py        # in-memory per-client rate limiter for the token-spending endpoints
     models.py           # Pydantic request/response shapes (incl. InstagramCarousel)
     main.py              # FastAPI app — /, /health, /repurpose, /repurpose-all
@@ -114,6 +126,6 @@ requirements-dev.txt     # prod deps + pytest/httpx (what you need to run the te
 - **Week 1 (done):** scaffold, `/health`, `/repurpose` for X only, mocked tests.
 - **Week 2 (done):** all five platforms wired up (X, LinkedIn, Instagram carousel, TikTok, newsletter) plus `/repurpose-all` to fan out to every platform in one call.
 - **Week 3 (done):** minimal web UI — paste box + a checkbox toggle per platform (pick a subset instead of always all five) + Repurpose button wired to `/repurpose-all`, results render as cards, each card has a one-click Copy button.
-- **Week 4 (in progress):** basic rate limiting on the token-spending endpoints (done — 10 req/60s per client by default) · `Dockerfile` deploy prep (done — see "Deploying" above) · actually deploying to a live URL + locking the API key as a host secret, still to come.
+- **Week 4 (in progress):** basic rate limiting on the token-spending endpoints (done — 10 req/60s per client by default) · `Dockerfile` deploy prep (done — see "Deploying" above) · hardened error handling for Claude API failures beyond a missing key (done — see "Cost, honestly" above) · actually deploying to a live URL + locking the API key as a host secret, still to come.
 
 Part of [Project Alpha](https://github.com/fellyroy-cmd) — Dara Obafemi's 9-month build-in-public AI career project.
