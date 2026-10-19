@@ -15,6 +15,16 @@ MODEL = os.environ.get("MODEL", "claude-sonnet-5")
 # short, so this is generous headroom, not a cost lever.
 MAX_TOKENS = 1024
 
+# Upper bound on how long a pasted script can be, in characters. This isn't
+# about Claude's context window (that's ~200K tokens, roughly 800K
+# characters -- nowhere near this limit) -- it's a product/cost guard. A
+# script this long (~2 hours of spoken transcript at ~150 wpm) is already
+# way past what any of the five platform prompts are designed to compress,
+# and /repurpose-all would multiply that token cost by five in one request.
+# Rejecting it up front with a 422 costs nothing; letting it through would
+# spend real money on a call nobody actually wants.
+MAX_SCRIPT_LENGTH = 50_000
+
 # Supported platforms for POST /repurpose. Week 1 shipped "x" only. Week 2
 # adds "linkedin", "instagram", "tiktok", and "newsletter" -- all five
 # platforms from the brief are wired up now.

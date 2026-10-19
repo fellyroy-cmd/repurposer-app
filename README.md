@@ -15,6 +15,8 @@ Paste a YouTube script, get it rewritten for another platform — in Dara Obafem
 
 **Rate limiting:** `/repurpose` and `/repurpose-all` share one request budget per client IP — **10 requests per 60-second window by default** (both configurable via `RATE_LIMIT_MAX_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` in `.env`). Go over the limit and you get a clear `429` explaining exactly what happened, not a silent drop or a queued request. `GET /health` is never rate-limited — a monitoring check should always get through. This is a simple in-memory counter (no new dependency), which is fine for this project's single-process deploy target but means the budget resets if the process restarts and isn't shared across multiple server instances.
 
+**Input validation:** `script` must be at least 1 character and no more than **50,000 characters** (`config.MAX_SCRIPT_LENGTH`) on both `/repurpose` and `/repurpose-all`. Both limits are enforced by Pydantic before the request handler runs at all — an empty or oversized paste gets a `422` with zero Claude API calls made and zero hits against the rate limit above, so a bad paste never costs a cent or eats into your request budget. 50,000 characters is roughly a 2-hour spoken transcript — well past what any of the five platform prompts are designed to compress into one post, and on `/repurpose-all` an oversized script would otherwise multiply that wasted cost by all five platforms in a single request.
+
 ## Running it
 
 ```bash
@@ -126,6 +128,6 @@ requirements-dev.txt     # prod deps + pytest/httpx (what you need to run the te
 - **Week 1 (done):** scaffold, `/health`, `/repurpose` for X only, mocked tests.
 - **Week 2 (done):** all five platforms wired up (X, LinkedIn, Instagram carousel, TikTok, newsletter) plus `/repurpose-all` to fan out to every platform in one call.
 - **Week 3 (done):** minimal web UI — paste box + a checkbox toggle per platform (pick a subset instead of always all five) + Repurpose button wired to `/repurpose-all`, results render as cards, each card has a one-click Copy button.
-- **Week 4 (in progress):** basic rate limiting on the token-spending endpoints (done — 10 req/60s per client by default) · `Dockerfile` deploy prep (done — see "Deploying" above) · hardened error handling for Claude API failures beyond a missing key (done — see "Cost, honestly" above) · actually deploying to a live URL + locking the API key as a host secret, still to come.
+- **Week 4 (in progress):** basic rate limiting on the token-spending endpoints (done — 10 req/60s per client by default) · `Dockerfile` deploy prep (done — see "Deploying" above) · hardened error handling for Claude API failures beyond a missing key (done — see "Cost, honestly" above) · input validation on script length so an empty or oversized paste gets a free `422` instead of a spent API call (done — see "Input validation" above) · actually deploying to a live URL + locking the API key as a host secret, still to come.
 
 Part of [Project Alpha](https://github.com/fellyroy-cmd) — Dara Obafemi's 9-month build-in-public AI career project.

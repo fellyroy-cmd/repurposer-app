@@ -4,9 +4,23 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from . import config
+
+# Shared across both request models so a oversized-script rejection is
+# worded the same way everywhere, and the limit itself lives in one place
+# (config.py) instead of being copy-pasted as a bare number.
+_SCRIPT_FIELD_KWARGS = dict(
+    min_length=1,
+    max_length=config.MAX_SCRIPT_LENGTH,
+    description=(
+        "The source script or long-form text to repurpose. "
+        f"Max {config.MAX_SCRIPT_LENGTH:,} characters."
+    ),
+)
+
 
 class RepurposeRequest(BaseModel):
-    script: str = Field(..., min_length=1, description="The source script or long-form text to repurpose.")
+    script: str = Field(..., **_SCRIPT_FIELD_KWARGS)
     platform: str = Field(
         ..., description="Target platform. Supports: x, linkedin, instagram, tiktok, newsletter"
     )
@@ -18,7 +32,7 @@ class RepurposeAllRequest(BaseModel):
     (and the original "always all five" behavior) keep working unchanged.
     Pass a subset to only fan out to the platforms the caller actually wants."""
 
-    script: str = Field(..., min_length=1, description="The source script or long-form text to repurpose.")
+    script: str = Field(..., **_SCRIPT_FIELD_KWARGS)
     platforms: Optional[List[str]] = Field(
         default=None,
         description="Subset of platforms to generate. Omit or leave empty for all supported platforms.",

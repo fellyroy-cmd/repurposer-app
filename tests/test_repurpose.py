@@ -28,6 +28,73 @@ def test_repurpose_rejects_unsupported_platform():
     assert "Unsupported platform" in response.json()["detail"]
 
 
+def test_repurpose_rejects_empty_script_before_calling_claude(monkeypatch):
+    """An empty paste box should never reach Claude -- Pydantic's min_length
+    rejects it with a 422 before the endpoint body (and call_claude) ever
+    runs. Patches call_claude with a spy that fails the test if it's
+    called at all, so this proves no token gets spent, not just that the
+    status code looks right."""
+    def fail_if_called(system_prompt, user_content):
+        raise AssertionError("call_claude should never run for an empty script")
+
+    monkeypatch.setattr("repurposer.main.call_claude", fail_if_called)
+
+    response = client.post("/repurpose", json={"script": "", "platform": "x"})
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["type"] == "string_too_short"
+
+
+def test_repurpose_rejects_oversized_script_before_calling_claude(monkeypatch):
+    """A script past config.MAX_SCRIPT_LENGTH is rejected with a 422 before
+    any API call is spent -- same no-token-spend guarantee as the empty
+    case above, just at the other end of the length range."""
+    from repurposer import config
+
+    def fail_if_called(system_prompt, user_content):
+        raise AssertionError("call_claude should never run for an oversized script")
+
+    monkeypatch.setattr("repurposer.main.call_claude", fail_if_called)
+
+    too_long = "a" * (config.MAX_SCRIPT_LENGTH + 1)
+    response = client.post("/repurpose", json={"script": too_long, "platform": "x"})
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["type"] == "string_too_long"
+
+
+def test_repurpose_all_rejects_oversized_script_before_calling_claude(monkeypatch):
+    """Same guard applies to the fan-out endpoint -- without this, one
+    oversized paste would have multiplied the wasted cost by every
+    platform in the fan-out instead of being rejected once, for free."""
+    from repurposer import config
+
+    def fail_if_called(system_prompt, user_content):
+        raise AssertionError("call_claude should never run for an oversized script")
+
+    monkeypatch.setattr("repurposer.main.call_claude", fail_if_called)
+
+    too_long = "a" * (config.MAX_SCRIPT_LENGTH + 1)
+    response = client.post("/repurpose-all", json={"script": too_long})
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["type"] == "string_too_long"
+
+
+def test_repurpose_accepts_script_exactly_at_the_length_cap(monkeypatch):
+    """The boundary itself must still work -- a script exactly at
+    MAX_SCRIPT_LENGTH is valid, not rejected. Only *over* the cap is."""
+    from repurposer import config
+
+    fake_thread = "1/ right at the edge and still fine."
+    monkeypatch.setattr("repurposer.main.call_claude", lambda system_prompt, user_content: fake_thread)
+
+    exactly_at_cap = "a" * config.MAX_SCRIPT_LENGTH
+    response = client.post("/repurpose", json={"script": exactly_at_cap, "platform": "x"})
+
+    assert response.status_code == 200
+
+
 def test_repurpose_returns_plain_text_for_linkedin(monkeypatch):
     """LinkedIn is a plain-text platform like X -- same shape, different
     prompt. Proves the new platform is wired through main.py correctly."""
