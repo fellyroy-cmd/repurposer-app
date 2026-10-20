@@ -17,6 +17,8 @@ Paste a YouTube script, get it rewritten for another platform — in Dara Obafem
 
 **Input validation:** `script` must be at least 1 character and no more than **50,000 characters** (`config.MAX_SCRIPT_LENGTH`) on both `/repurpose` and `/repurpose-all`. Both limits are enforced by Pydantic before the request handler runs at all — an empty or oversized paste gets a `422` with zero Claude API calls made and zero hits against the rate limit above, so a bad paste never costs a cent or eats into your request budget. 50,000 characters is roughly a 2-hour spoken transcript — well past what any of the five platform prompts are designed to compress into one post, and on `/repurpose-all` an oversized script would otherwise multiply that wasted cost by all five platforms in a single request.
 
+The same rule applies to platform names: `platform` on `/repurpose` and every entry inside the `platforms` list on `/repurpose-all` must be a non-empty string. An empty string ("") is still technically a valid `str`, so without this it would have slipped past Pydantic and only been caught deep inside the endpoint's "unsupported platform" check — a confusing `400` ("Unsupported platform ''") that reads like a typo got misreported rather than an empty field. Now it gets the same clear `422` as an empty script, at the same validation layer, before `call_claude` ever runs.
+
 ## Running it
 
 ```bash

@@ -28,6 +28,42 @@ def test_repurpose_rejects_unsupported_platform():
     assert "Unsupported platform" in response.json()["detail"]
 
 
+def test_repurpose_rejects_empty_platform_before_calling_claude(monkeypatch):
+    """An empty `platform` string ("") is still a valid str, so without a
+    min_length check it would slip past Pydantic and only get caught deep
+    in main.py's unsupported-platform check -- a confusing 400 ("Unsupported
+    platform ''") that reads like a typo got misreported. Rejecting it here
+    instead gives a clear 422 at the same validation layer that already
+    catches an empty script, before call_claude ever runs."""
+    def fail_if_called(system_prompt, user_content):
+        raise AssertionError("call_claude should never run for an empty platform")
+
+    monkeypatch.setattr("repurposer.main.call_claude", fail_if_called)
+
+    response = client.post("/repurpose", json={"script": "some script", "platform": ""})
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["type"] == "string_too_short"
+    assert response.json()["detail"][0]["loc"] == ["body", "platform"]
+
+
+def test_repurpose_all_rejects_empty_platform_in_subset_before_calling_claude(monkeypatch):
+    """Same guard applies to every entry inside /repurpose-all's `platforms`
+    list, not just the single `platform` field on /repurpose -- a stray
+    empty string in the subset is caught at the same layer, before any
+    platform in the fan-out spends a token."""
+    def fail_if_called(system_prompt, user_content):
+        raise AssertionError("call_claude should never run when the platform list has an empty entry")
+
+    monkeypatch.setattr("repurposer.main.call_claude", fail_if_called)
+
+    response = client.post("/repurpose-all", json={"script": "some script", "platforms": ["x", ""]})
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["type"] == "string_too_short"
+    assert response.json()["detail"][0]["loc"] == ["body", "platforms", 1]
+
+
 def test_repurpose_rejects_empty_script_before_calling_claude(monkeypatch):
     """An empty paste box should never reach Claude -- Pydantic's min_length
     rejects it with a 422 before the endpoint body (and call_claude) ever
