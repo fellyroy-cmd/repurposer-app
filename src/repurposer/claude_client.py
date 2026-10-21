@@ -84,4 +84,9 @@ def call_claude(system_prompt: str, user_content: str) -> str:
         # unhandled, and never swallow it into a fake response either.
         raise _wrap_sdk_error(exc) from exc
 
-    return message.content[0].text
+    # Newer models can put a "thinking" block before the answer, so content[0]
+    # isn't always the text. Join every text block instead of trusting position.
+    text = "".join(b.text for b in message.content if b.type == "text" and b.text)
+    if not text:
+        raise ClaudeApiError("Claude returned no text for this request. Try again.", status_code=502)
+    return text

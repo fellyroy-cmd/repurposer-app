@@ -13,7 +13,7 @@ MODEL = os.environ.get("MODEL", "claude-sonnet-5")
 
 # Claude caps a single response at this many tokens. One platform post is
 # short, so this is generous headroom, not a cost lever.
-MAX_TOKENS = 1024
+MAX_TOKENS = 4096  # headroom: newer models spend part of the budget on a thinking block
 
 # Upper bound on how long a pasted script can be, in characters. This isn't
 # about Claude's context window (that's ~200K tokens, roughly 800K

@@ -32,6 +32,7 @@ def test_call_claude_calls_sdk_with_configured_model(monkeypatch):
     captured = {}
 
     class FakeTextBlock:
+        type = "text"
         text = "mocked platform content"
 
     class FakeMessage:
@@ -152,3 +153,28 @@ def test_call_claude_wraps_generic_server_error(monkeypatch):
         call_claude(system_prompt="system", user_content="user")
 
     assert exc_info.value.status_code == 502
+
+
+def test_call_claude_skips_a_leading_thinking_block(monkeypatch):
+    """Newer models can return a thinking block before the answer. Reading
+    content[0] blindly returned None and the API sent back an empty post."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "fake-key-for-test")
+
+    class FakeThinkingBlock:
+        type = "thinking"
+        text = None
+
+    class FakeTextBlock:
+        type = "text"
+        text = "the real answer"
+
+    class FakeMessage:
+        content = [FakeThinkingBlock(), FakeTextBlock()]
+
+    class FakeAnthropicClient:
+        def __init__(self, api_key):
+            self.messages = type("M", (), {"create": lambda self, **kw: FakeMessage()})()
+
+    monkeypatch.setattr("repurposer.claude_client.anthropic.Anthropic", FakeAnthropicClient)
+
+    assert call_claude(system_prompt="s", user_content="u") == "the real answer"
