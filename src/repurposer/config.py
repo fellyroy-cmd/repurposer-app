@@ -9,7 +9,7 @@ self-contained -- someone who clones it doesn't need access to the HQ.
 import os
 
 # Model id is swappable via env, never hardcoded elsewhere in the app.
-MODEL = os.environ.get("MODEL", "claude-sonnet-5")
+MODEL = os.environ.get("MODEL", "claude-sonnet-5-5")
 
 # Shared secret for the token-spending endpoints. Set it on any public deploy;
 # leave it unset locally and the app needs no code.
