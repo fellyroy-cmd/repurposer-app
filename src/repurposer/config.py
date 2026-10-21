@@ -11,6 +11,10 @@ import os
 # Model id is swappable via env, never hardcoded elsewhere in the app.
 MODEL = os.environ.get("MODEL", "claude-sonnet-5")
 
+# Shared secret for the token-spending endpoints. Set it on any public deploy;
+# leave it unset locally and the app needs no code.
+ACCESS_CODE = os.environ.get("ACCESS_CODE", "")
+
 # Claude caps a single response at this many tokens. One platform post is
 # short, so this is generous headroom, not a cost lever.
 MAX_TOKENS = 4096  # headroom: newer models spend part of the budget on a thinking block

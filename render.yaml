@@ -1,0 +1,13 @@
+# Render Blueprint: New > Blueprint > pick this repo. Builds the Dockerfile on the free plan.
+# Render asks for the two secrets on first deploy (sync: false = never stored in this file).
+services:
+  - type: web
+    name: repurposer
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ACCESS_CODE
+        sync: false

@@ -1,6 +1,8 @@
 """FastAPI app. Endpoints: /, /health, /repurpose, /repurpose-all."""
 
 import json
+import secrets
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -40,6 +42,25 @@ def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
+@app.get("/config")
+def public_config() -> dict:
+    """What the UI needs to know before the first call: whether to show the
+    access-code field. Never returns the code itself."""
+    return {"access_code_required": bool(config.ACCESS_CODE), "platforms": config.SUPPORTED_PLATFORMS}
+
+
+def _enforce_access_code(request: Request) -> None:
+    """When ACCESS_CODE is set (it should be on any public deploy), the
+    token-spending endpoints need a matching X-Access-Code header -- so a
+    stranger who finds the URL can't spend Dara's Anthropic credit. Unset
+    locally, so running on your own machine needs nothing extra."""
+    if not config.ACCESS_CODE:
+        return
+    given = request.headers.get("X-Access-Code", "")
+    if not secrets.compare_digest(given.encode(), config.ACCESS_CODE.encode()):
+        raise HTTPException(status_code=401, detail="Wrong or missing access code.")
+
+
 def _enforce_rate_limit(request: Request) -> None:
     """Shared guard for the token-spending endpoints. Keys the limit on the
     caller's IP -- fails loudly with a 429 naming the limit, never a silent
@@ -76,6 +97,7 @@ def _build_response(platform: str, raw_content: str) -> RepurposeResponse:
 
 @app.post("/repurpose", response_model=RepurposeResponse)
 def repurpose(req: RepurposeRequest, request: Request) -> RepurposeResponse:
+    _enforce_access_code(request)
     _enforce_rate_limit(request)
 
     if req.platform not in config.SUPPORTED_PLATFORMS:
@@ -114,6 +136,7 @@ def repurpose_all(req: RepurposeAllRequest, request: Request) -> RepurposeAllRes
     loudly on the very first platform instead of quietly returning a partial
     list and hiding that the rest never happened.
     """
+    _enforce_access_code(request)
     _enforce_rate_limit(request)
 
     platforms = req.platforms or config.SUPPORTED_PLATFORMS
@@ -125,17 +148,19 @@ def repurpose_all(req: RepurposeAllRequest, request: Request) -> RepurposeAllRes
             detail=f"Unsupported platform(s) {unsupported}. Supported so far: {config.SUPPORTED_PLATFORMS}",
         )
 
-    results = []
-    for platform in platforms:
-        system_prompt = config.get_system_prompt(platform)
+    # All platforms run at once (each call is network-bound), so the wait is
+    # the slowest platform, not the sum of all five. map() keeps the order.
+    def one(platform: str) -> str:
+        return call_claude(config.get_system_prompt(platform), req.script)
 
-        try:
-            raw_content = call_claude(system_prompt, req.script)
-        except MissingApiKeyError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
-        except ClaudeApiError as exc:
-            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    try:
+        with ThreadPoolExecutor(max_workers=len(platforms)) as pool:
+            raw = list(pool.map(one, platforms))
+    except MissingApiKeyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ClaudeApiError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
-        results.append(_build_response(platform, raw_content))
+    results = [_build_response(p, r) for p, r in zip(platforms, raw)]
 
     return RepurposeAllResponse(results=results)
