@@ -312,6 +312,24 @@ def test_repurpose_all_rejects_unsupported_platform_in_subset():
     assert "facebook" in response.json()["detail"]
 
 
+def test_repurpose_all_rejects_duplicate_platform_before_calling_claude(monkeypatch):
+    """A repeated platform name (e.g. a buggy frontend sending ["x", "x"],
+    or a double-clicked checkbox) must not fan out to one real Claude call
+    per duplicate -- same platform, same output, charged twice. This is a
+    free 400, not a spent API call, same honesty rule as every other
+    validation guard in this file."""
+    def fail_if_called(system_prompt, user_content):
+        raise AssertionError("call_claude should never run when the platform list has a duplicate")
+
+    monkeypatch.setattr("repurposer.main.call_claude", fail_if_called)
+
+    response = client.post("/repurpose-all", json={"script": "some script", "platforms": ["x", "x", "linkedin"]})
+
+    assert response.status_code == 400
+    assert "Duplicate platform" in response.json()["detail"]
+    assert "x" in response.json()["detail"]
+
+
 def test_repurpose_all_fails_loudly_when_api_key_missing(monkeypatch):
     """Same honesty rule applies to the fan-out: if the key is missing, this
     must not quietly return a partial list of whichever platforms happened

@@ -148,6 +148,24 @@ def repurpose_all(req: RepurposeAllRequest, request: Request) -> RepurposeAllRes
             detail=f"Unsupported platform(s) {unsupported}. Supported so far: {config.SUPPORTED_PLATFORMS}",
         )
 
+    # Without this, a repeated name (e.g. ["x", "x"] from a buggy frontend,
+    # or someone double-clicking a checkbox) would fan out to one real
+    # Claude call per duplicate -- same platform, same output, charged
+    # twice. Catching it here keeps the "every call costs real tokens"
+    # honesty rule intact: a client-side mistake fails for free instead of
+    # silently doubling the bill.
+    seen: list[str] = []
+    duplicates: list[str] = []
+    for p in platforms:
+        if p in seen and p not in duplicates:
+            duplicates.append(p)
+        seen.append(p)
+    if duplicates:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Duplicate platform(s) in request: {duplicates}. List each platform once.",
+        )
+
     # All platforms run at once (each call is network-bound), so the wait is
     # the slowest platform, not the sum of all five. map() keeps the order.
     def one(platform: str) -> str:
