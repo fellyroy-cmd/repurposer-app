@@ -187,6 +187,36 @@ def test_repurpose_fails_loudly_on_malformed_instagram_json(monkeypatch):
     assert "instagram" in response.json()["detail"]
 
 
+def test_repurpose_rejects_instagram_carousel_with_too_few_slides(monkeypatch):
+    """The Instagram prompt (config.py) asks Claude for 5-8 slides. If Claude
+    returns valid JSON but only 2 slides, that's not malformed -- it's a
+    carousel that doesn't match the shape the product actually needs. This
+    must still fail loudly with a 502, same as unparseable JSON, instead of
+    quietly rendering a 2-slide "carousel" in the UI."""
+    fake_json = json.dumps({"caption": "too short", "slides": ["slide one", "slide two"]})
+    monkeypatch.setattr("repurposer.main.call_claude", lambda system_prompt, user_content: fake_json)
+
+    response = client.post("/repurpose", json={"script": "A script about AI agents.", "platform": "instagram"})
+
+    assert response.status_code == 502
+    assert "instagram" in response.json()["detail"]
+
+
+def test_repurpose_rejects_instagram_carousel_with_too_many_slides(monkeypatch):
+    """Same boundary from the other direction: Claude ignoring the 8-slide
+    ceiling and returning a 12-slide wall must also fail loudly, not silently
+    pass through and break the swipeable-tile UI."""
+    fake_json = json.dumps(
+        {"caption": "too long", "slides": [f"slide {i}" for i in range(12)]}
+    )
+    monkeypatch.setattr("repurposer.main.call_claude", lambda system_prompt, user_content: fake_json)
+
+    response = client.post("/repurpose", json={"script": "A script about AI agents.", "platform": "instagram"})
+
+    assert response.status_code == 502
+    assert "instagram" in response.json()["detail"]
+
+
 def test_repurpose_returns_plain_text_for_tiktok(monkeypatch):
     """TikTok is a plain-text platform like X and LinkedIn -- it's a spoken
     script, not structured data, so it reuses the same `content` shape."""

@@ -22,6 +22,8 @@ The same rule applies to platform names: `platform` on `/repurpose` and every en
 
 `/repurpose-all`'s `platforms` list also can't contain the same platform twice (e.g. `["x", "x"]` from a buggy frontend or a double-clicked checkbox) — that would otherwise fan out to one real Claude call per duplicate, charging twice for an identical result. A repeat returns a `400` naming the duplicate before any call is made, for free.
 
+An Instagram carousel is also validated on the way *back* from Claude: the prompt asks for 5-8 slides, and `InstagramCarousel` now enforces that same range. If Claude's JSON is well-formed but returns only 2 slides (or 20), that's rejected with the same `502` as malformed JSON — a 2-slide "carousel" isn't a carousel, and a 20-slide wall would break the swipeable-tile UI it renders into.
+
 **Access code (optional, for public deploys):** set `ACCESS_CODE` in `.env` and `/repurpose` and `/repurpose-all` both require a matching `X-Access-Code` header on every request — a wrong or missing code returns `401` before the rate limit is even checked and before any Claude call happens. Leave `ACCESS_CODE` blank (the default) and both endpoints work with no header at all, which is what you want running the app on your own machine. `GET /config` tells the UI whether a code is currently required, so the code field only shows up on deploys that actually need it.
 
 ## Running it

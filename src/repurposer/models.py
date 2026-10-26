@@ -51,10 +51,23 @@ class RepurposeAllRequest(BaseModel):
 
 class InstagramCarousel(BaseModel):
     """Structured shape for an IG carousel -- a list of slides plus the
-    caption that goes under the post, instead of one wall of text."""
+    caption that goes under the post, instead of one wall of text.
+
+    The Instagram prompt in config.py asks Claude for
+    INSTAGRAM_MIN_SLIDES-INSTAGRAM_MAX_SLIDES slides (5-8), but until now
+    nothing enforced that range on the way back in -- `slides` only required
+    at least 1 entry. A 1-slide "carousel" isn't a carousel, and a 20-slide
+    wall breaks the swipeable-tile UI it's rendered into. Pinning the same
+    bounds here means a Claude response outside that range fails the same
+    way malformed JSON already does: a clear 502 in `_build_response`
+    (main.py), never a silently-wrong carousel reaching the UI."""
 
     caption: str
-    slides: List[str] = Field(..., min_length=1)
+    slides: List[str] = Field(
+        ...,
+        min_length=config.INSTAGRAM_MIN_SLIDES,
+        max_length=config.INSTAGRAM_MAX_SLIDES,
+    )
 
 
 class RepurposeResponse(BaseModel):
